@@ -79,7 +79,10 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     _recycledPages = [[NSMutableSet alloc] init];
     _photos = [[NSMutableArray alloc] init];
     _thumbPhotos = [[NSMutableArray alloc] init];
-    _currentGridContentOffset = CGPointMake(0, CGFLOAT_MAX);
+    if (@available(iOS 11.0, *)) {
+    } else {
+        _currentGridContentOffset = CGPointMake(0, CGFLOAT_MAX);
+    }
     _didSavePreviousStateOfNavBar = NO;
     self.automaticallyAdjustsScrollViewInsets = NO;
     
@@ -997,23 +1000,33 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 }
 
 - (CGPoint)contentOffsetForPageAtIndex:(NSUInteger)index {
-	CGFloat pageWidth = _pagingScrollView.bounds.size.width;
-	CGFloat newOffset = index * pageWidth;
-	return CGPointMake(newOffset, 0);
+    CGFloat pageWidth = _pagingScrollView.bounds.size.width;
+    CGFloat newOffset = index * pageWidth;
+    return CGPointMake(newOffset, 0);
 }
 
 - (CGRect)frameForToolbarAtOrientation:(UIInterfaceOrientation)orientation {
     CGFloat height = 44;
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone &&
         UIInterfaceOrientationIsLandscape(orientation)) height = 32;
-	return CGRectIntegral(CGRectMake(0, self.view.bounds.size.height - height, self.view.bounds.size.width, height));
+    CGFloat y = self.view.bounds.size.height - height;
+    if (@available(iOS 11.0, *)) {
+        y -= self.view.safeAreaInsets.bottom;
+    }
+    return CGRectIntegral(CGRectMake(0, y, self.view.bounds.size.width, height));
 }
 
 - (CGRect)frameForCaptionView:(MWCaptionView *)captionView atIndex:(NSUInteger)index {
     CGRect pageFrame = [self frameForPageAtIndex:index];
     CGSize captionSize = [captionView sizeThatFits:CGSizeMake(pageFrame.size.width, 0)];
+    CGFloat bottomInset = 0.0;
+    if (@available(iOS 11, *)) {
+        bottomInset = self.view.safeAreaInsets.bottom;
+    } else {
+        bottomInset = self.view.layoutMargins.bottom;
+    }
     CGRect captionFrame = CGRectMake(pageFrame.origin.x,
-                                     pageFrame.size.height - captionSize.height - (_toolbar.superview?_toolbar.frame.size.height:0),
+                                     pageFrame.size.height - captionSize.height - (_toolbar.superview?_toolbar.frame.size.height:0)-bottomInset,
                                      pageFrame.size.width,
                                      captionSize.height);
     return CGRectIntegral(captionFrame);
@@ -1314,7 +1327,10 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     
     // Init grid controller
     _gridController = [[MWGridViewController alloc] init];
-    _gridController.initialContentOffset = _currentGridContentOffset;
+    if (@available(iOS 11.0, *)) {
+    } else {
+        _gridController.initialContentOffset = _currentGridContentOffset;
+    }
     _gridController.browser = self;
     _gridController.selectionMode = _displaySelectionButtons;
     _gridController.view.frame = self.view.bounds;
@@ -1360,8 +1376,11 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     
     if (!_gridController) return;
     
-    // Remember previous content offset
-    _currentGridContentOffset = _gridController.collectionView.contentOffset;
+    if (@available(iOS 11.0, *)) {
+    } else {
+        // Remember previous content offset
+        _currentGridContentOffset = _gridController.collectionView.contentOffset;
+    }
     
     // Restore action button if it was removed
     if (_gridPreviousRightNavItem == _actionButton && _actionButton) {
