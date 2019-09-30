@@ -252,6 +252,8 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     NSMutableArray *items = [[NSMutableArray alloc] init];
 
     // Left button - Grid
+    _deleteButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"218-trash2.png"] style:UIBarButtonItemStylePlain target:self action:@selector(deleteButtonTapped:)];
+    [items addObject:_deleteButton];
     if (_enableGrid) {
         hasItems = YES;
         [items addObject:[[UIBarButtonItem alloc] initWithImage:[UIImage imageForResourcePath:@"MWPhotoBrowser.bundle/UIBarButtonItemGrid" ofType:@"png" inBundle:[NSBundle bundleForClass:[self class]]] style:UIBarButtonItemStylePlain target:self action:@selector(showGridAnimated)]];
@@ -1170,6 +1172,43 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 
 #pragma mark - Interactions
 
+-(void)showDeleteConfirmActionSheet {
+    NSString *title = [NSString stringWithFormat:NSLocalizedString(@"Are you sure? You'll be prompted to permanently delete this photo from your media library.", nil)];
+    UIActionSheet *actionSheet = [[UIActionSheet alloc] initWithTitle:title
+                                                             delegate:self cancelButtonTitle:NSLocalizedString(@"Cancel", nil) destructiveButtonTitle:NSLocalizedString(@"Delete Photo", nil) otherButtonTitles:nil];
+    
+    actionSheet.actionSheetStyle = UIActionSheetStyleAutomatic;
+    [actionSheet showInView:[self view]];
+}
+
+- (void)deleteButtonTapped:(id)sender {
+    [self showDeleteConfirmActionSheet];
+}
+
+- (void) deleteAssetWithLocalIdentifier:(NSString*)localIdentifier {
+    PHFetchResult<PHAsset *> *assets = [PHAsset fetchAssetsWithLocalIdentifiers:@[localIdentifier] options:nil];
+    
+    if (assets.count == 0) {
+        return;
+    }
+    PHAsset *asset = assets.firstObject;
+    
+    [[PHPhotoLibrary sharedPhotoLibrary] performChanges: ^{
+        [PHAssetChangeRequest deleteAssets: @[asset]];
+    } completionHandler:^(BOOL success, NSError *error) {
+        if(error) {
+            // user cancel deleting operation can cause error too.
+        }
+    }];
+}
+
+- (void) deletePhoto {
+    MWPhoto *photo = [self photoAtIndex:_currentPageIndex];
+    NSString *localIdentifier = photo.asset.localIdentifier;
+    [self deleteAssetWithLocalIdentifier:localIdentifier];
+    [self.navigationController popToRootViewControllerAnimated:YES];
+}
+
 - (void)selectedButtonTapped:(id)sender {
     UIButton *selectedButton = (UIButton *)sender;
     selectedButton.selected = !selectedButton.selected;
@@ -1655,6 +1694,18 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     }
     
 }
+
+
+#pragma mark - Action Sheet Delegate
+
+- (void)actionSheet:(UIActionSheet *)actionSheet didDismissWithButtonIndex:(NSInteger)buttonIndex {
+    if (buttonIndex == 0) {
+        [self deletePhoto];
+    }
+
+    [self hideControlsAfterDelay]; // Continue as normal...
+}
+
 
 #pragma mark - Action Progress
 
