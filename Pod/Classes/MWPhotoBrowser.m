@@ -172,8 +172,6 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 	
     // Toolbar
     _toolbar = [[UIToolbar alloc] initWithFrame:[self frameForToolbarAtOrientation:self.interfaceOrientation]];
-//    _toolbar.tintColor = [UIColor whiteColor];
-//    _toolbar.barTintColor = nil;
     [_toolbar setBackgroundImage:nil forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsDefault];
     [_toolbar setBackgroundImage:nil forToolbarPosition:UIToolbarPositionAny barMetrics:UIBarMetricsLandscapePhone];
     _toolbar.barStyle = UIBarStyleDefault;
@@ -181,10 +179,11 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     
     // Toolbar Items
     if (self.displayNavArrows) {
-        NSString *arrowPathFormat = @"MWPhotoBrowser.bundle/UIBarButtonItemArrow%@";
-        UIImage *previousButtonImage = [UIImage imageForResourcePath:[NSString stringWithFormat:arrowPathFormat, @"Left"] ofType:@"png" inBundle:[NSBundle bundleForClass:[self class]]];
-        UIImage *nextButtonImage = [UIImage imageForResourcePath:[NSString stringWithFormat:arrowPathFormat, @"Right"] ofType:@"png" inBundle:[NSBundle bundleForClass:[self class]]];
-        _previousButton = [[UIBarButtonItem alloc] initWithImage:previousButtonImage style:UIBarButtonItemStylePlain target:self action:@selector(gotoPreviousPage)];
+        UIImage *leftImage = [UIImage imageNamed:@"UIBarButtonItemArrowLeft"];
+        UIImage *rightImage = [UIImage  imageNamed:@"UIBarButtonItemArrowRight"];
+        UIImage *previousButtonImage = (leftImage) ? leftImage : [UIImage imageForResourcePath:@"MWPhotoBrowser.bundle/UIBarButtonItemArrowLeft" ofType:@"png" inBundle:[NSBundle bundleForClass:[self class]]];
+        UIImage *nextButtonImage = (rightImage) ? rightImage : [UIImage imageForResourcePath:@"MWPhotoBrowser.bundle/UIBarButtonItemArrowRight" ofType:@"png" inBundle:[NSBundle bundleForClass:[self class]]];
+        _previousButton =  [[UIBarButtonItem alloc] initWithImage:previousButtonImage style:UIBarButtonItemStylePlain target:self action:@selector(gotoPreviousPage)];
         _nextButton = [[UIBarButtonItem alloc] initWithImage:nextButtonImage style:UIBarButtonItemStylePlain target:self action:@selector(gotoNextPage)];
     }
     if (self.displayActionButton) {
@@ -252,15 +251,13 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     NSMutableArray *items = [[NSMutableArray alloc] init];
 
     // Left button - Grid
-    _deleteButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"218-trash2.png"] style:UIBarButtonItemStylePlain target:self action:@selector(deleteButtonTapped:)];
+    _deleteButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"trash.png"] style:UIBarButtonItemStylePlain target:self action:@selector(deleteButtonTapped:)];
     [items addObject:_deleteButton];
     if (_enableGrid) {
         hasItems = YES;
         [items addObject:[[UIBarButtonItem alloc] initWithImage:[UIImage imageForResourcePath:@"MWPhotoBrowser.bundle/UIBarButtonItemGrid" ofType:@"png" inBundle:[NSBundle bundleForClass:[self class]]] style:UIBarButtonItemStylePlain target:self action:@selector(showGridAnimated)]];
-    } else {
-        [items addObject:fixedSpace];
     }
-
+    
     // Middle - Nav
     if (_previousButton && _nextButton && numberOfPhotos > 1) {
         hasItems = YES;
