@@ -558,10 +558,6 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 
 #pragma mark - Rotation
 
-- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation {
-    return YES;
-}
-
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
     return UIInterfaceOrientationMaskAll;
 }
@@ -1249,7 +1245,33 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 
 - (void)playVideoAtIndex:(NSUInteger)index {
     id photo = [self photoAtIndex:index];
-    if ([photo respondsToSelector:@selector(getVideoURL:)]) {
+    MWPhoto *mwPhoto = (MWPhoto*)photo;
+    if (mwPhoto.asset && [photo respondsToSelector:@selector(getVideoPlayerItem:)]) {
+        
+        // Valid for playing
+        [self clearCurrentVideo];
+        _currentVideoIndex = index;
+        [self setVideoLoadingIndicatorVisible:YES atPageIndex:index];
+
+        // Get video and play
+        typeof(self) __weak weakSelf = self;
+        [photo getVideoPlayerItem:^(AVPlayerItem *playerItem) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // If the video is not playing anymore then bail
+                typeof(self) strongSelf = weakSelf;
+                if (!strongSelf) return;
+                if (strongSelf->_currentVideoIndex != index || !strongSelf->_viewIsActive) {
+                    return;
+                }
+                if (playerItem) {
+                    [weakSelf _playVideoWithPlayerItem:playerItem atPhotoIndex:index];
+                    [weakSelf setVideoLoadingIndicatorVisible:NO atPageIndex:index];
+                } else {
+                    [weakSelf setVideoLoadingIndicatorVisible:NO atPageIndex:index];
+                }
+            });
+        }];
+    } else if ([photo respondsToSelector:@selector(getVideoURL:)]) {
         
         // Valid for playing
         [self clearCurrentVideo];
@@ -1278,54 +1300,75 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 }
 
 - (void)_playVideo:(NSURL *)videoURL atPhotoIndex:(NSUInteger)index {
-
     // Setup player
-    _currentVideoPlayerViewController = [[MPMoviePlayerViewController alloc] initWithContentURL:videoURL];
-    [_currentVideoPlayerViewController.moviePlayer prepareToPlay];
-    _currentVideoPlayerViewController.moviePlayer.shouldAutoplay = YES;
-    _currentVideoPlayerViewController.moviePlayer.scalingMode = MPMovieScalingModeAspectFit;
-    _currentVideoPlayerViewController.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    AVPlayer *player = [AVPlayer playerWithURL:videoURL];
     
-    // Remove the movie player view controller from the "playback did finish" notification observers
-    // Observe ourselves so we can get it to use the crossfade transition
-    [[NSNotificationCenter defaultCenter] removeObserver:_currentVideoPlayerViewController
-                                                    name:MPMoviePlayerPlaybackDidFinishNotification
-                                                  object:_currentVideoPlayerViewController.moviePlayer];
+    // setup AVPlayerViewController
+    _currentVideoPlayerViewController = [[AVPlayerViewController alloc] init];
+    _currentVideoPlayerViewController.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    _currentVideoPlayerViewController.modalPresentationStyle = UIModalPresentationFullScreen;
+    _currentVideoPlayerViewController.player = player;
+    [player play];
+
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(videoFinishedCallback:)
-                                                 name:MPMoviePlayerPlaybackDidFinishNotification
-                                               object:_currentVideoPlayerViewController.moviePlayer];
-
+                                                 name:AVPlayerItemDidPlayToEndTimeNotification
+                                               object:_currentVideoPlayerViewController.player.currentItem];
+    
     // Show
-    [self presentViewController:_currentVideoPlayerViewController animated:YES completion:nil];
+    [self presentViewController:_currentVideoPlayerViewController animated:YES completion:^{
+        [self->_currentVideoPlayerViewController addObserver:self forKeyPath:@"view.frame" options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:nil];
+    }];
+}
 
+- (void)_playVideoWithPlayerItem:(AVPlayerItem *)playerItem atPhotoIndex:(NSUInteger)index {
+    // Setup player
+    AVPlayer *player = [AVPlayer playerWithPlayerItem:playerItem];
+    
+    // setup AVPlayerViewController
+    _currentVideoPlayerViewController = [[AVPlayerViewController alloc] init];
+    _currentVideoPlayerViewController.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    _currentVideoPlayerViewController.modalPresentationStyle = UIModalPresentationFullScreen;
+    _currentVideoPlayerViewController.player = player;
+    [player play];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(videoFinishedCallback:)
+                                                 name:AVPlayerItemDidPlayToEndTimeNotification
+                                               object:_currentVideoPlayerViewController.player.currentItem];
+    
+    // Show
+    [self presentViewController:_currentVideoPlayerViewController animated:YES completion:^{
+        [self->_currentVideoPlayerViewController addObserver:self forKeyPath:@"view.frame" options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:nil];
+    }];
+}
+
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if ([keyPath isEqualToString:@"view.frame"]) {
+        if (_currentVideoPlayerViewController.isBeingDismissed) {
+            NSLog(@"Video Closed");
+            [self clearCurrentVideo];
+        }
+     }
 }
 
 - (void)videoFinishedCallback:(NSNotification*)notification {
-    
     // Remove observer
     [[NSNotificationCenter defaultCenter] removeObserver:self
-                                                    name:MPMoviePlayerPlaybackDidFinishNotification
-                                                  object:_currentVideoPlayerViewController.moviePlayer];
+                                                    name:AVPlayerItemDidPlayToEndTimeNotification
+                                                  object:_currentVideoPlayerViewController.player.currentItem];
     
     // Clear up
     [self clearCurrentVideo];
     
     // Dismiss
-    BOOL error = [[[notification userInfo] objectForKey:MPMoviePlayerPlaybackDidFinishReasonUserInfoKey] intValue] == MPMovieFinishReasonPlaybackError;
-    if (error) {
-        // Error occured so dismiss with a delay incase error was immediate and we need to wait to dismiss the VC
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self dismissViewControllerAnimated:YES completion:nil];
-        });
-    } else {
-        [self dismissViewControllerAnimated:YES completion:nil];
-    }
-    
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)clearCurrentVideo {
-    [_currentVideoPlayerViewController.moviePlayer stop];
+    [_currentVideoPlayerViewController.player pause];
+    _currentVideoPlayerViewController.player = nil;
     [_currentVideoLoadingIndicator removeFromSuperview];
     _currentVideoPlayerViewController = nil;
     _currentVideoLoadingIndicator = nil;
@@ -1405,12 +1448,12 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     // Animate grid in and photo scroller out
     [_gridController willMoveToParentViewController:self];
     [UIView animateWithDuration:animated ? 0.3 : 0 animations:^(void) {
-        _gridController.view.frame = self.view.bounds;
+        self->_gridController.view.frame = self.view.bounds;
         CGRect newPagingFrame = [self frameForPagingScrollView];
         newPagingFrame = CGRectOffset(newPagingFrame, 0, (self.startOnGrid ? 1 : -1) * newPagingFrame.size.height);
-        _pagingScrollView.frame = newPagingFrame;
+        self->_pagingScrollView.frame = newPagingFrame;
     } completion:^(BOOL finished) {
-        [_gridController didMoveToParentViewController:self];
+        [self->_gridController didMoveToParentViewController:self];
     }];
     
 }
@@ -1446,7 +1489,7 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     // Animate, hide grid and show paging scroll view
     [UIView animateWithDuration:0.3 animations:^{
         tmpGridController.view.frame = CGRectOffset(self.view.bounds, 0, (self.startOnGrid ? -1 : 1) * self.view.bounds.size.height);
-        _pagingScrollView.frame = [self frameForPagingScrollView];
+        self->_pagingScrollView.frame = [self frameForPagingScrollView];
     } completion:^(BOOL finished) {
         [tmpGridController willMoveToParentViewController:nil];
         [tmpGridController.view removeFromSuperview];
@@ -1521,12 +1564,12 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
         [self.navigationController.navigationBar setAlpha:alpha];
         
         // Toolbar
-        _toolbar.frame = [self frameForToolbarAtOrientation:self.interfaceOrientation];
-        if (hidden) _toolbar.frame = CGRectOffset(_toolbar.frame, 0, animatonOffset);
-        _toolbar.alpha = alpha;
+        self->_toolbar.frame = [self frameForToolbarAtOrientation:self.interfaceOrientation];
+        if (hidden) self->_toolbar.frame = CGRectOffset(self->_toolbar.frame, 0, animatonOffset);
+        self->_toolbar.alpha = alpha;
 
         // Captions
-        for (MWZoomingScrollView *page in _visiblePages) {
+        for (MWZoomingScrollView *page in self->_visiblePages) {
             if (page.captionView) {
                 MWCaptionView *v = page.captionView;
                 // Pass any index, all we're interested in is the Y
@@ -1539,7 +1582,7 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
         }
         
         // Selected buttons
-        for (MWZoomingScrollView *page in _visiblePages) {
+        for (MWZoomingScrollView *page in self->_visiblePages) {
             if (page.selectedButton) {
                 UIButton *v = page.selectedButton;
                 CGRect newFrame = [self frameForSelectedButton:v atIndex:0];

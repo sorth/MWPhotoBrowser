@@ -138,6 +138,30 @@
     }
 }
 
+- (void)getVideoPlayerItem:(void (^)(AVPlayerItem *_playerItem))completion {
+    if (_playerItem) {
+        completion(_playerItem);
+    } else if (_asset && _asset.mediaType == PHAssetMediaTypeVideo) {
+        [self cancelVideoRequest]; // Cancel any existing
+        PHVideoRequestOptions *options = [PHVideoRequestOptions new];
+        options.networkAccessAllowed = YES;
+        typeof(self) __weak weakSelf = self;
+        _assetVideoRequestID = [[PHImageManager defaultManager] requestPlayerItemForVideo:_asset options:options resultHandler:^(AVPlayerItem * _Nullable playerItem, NSDictionary * _Nullable info) {
+            
+            // dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ // Testing
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf->_assetVideoRequestID = PHInvalidImageRequestID;
+            if ([playerItem isKindOfClass:[AVPlayerItem class]]) {
+                completion(playerItem);
+            } else {
+                completion(nil);
+            }
+            
+        }];
+    }
+}
+
 #pragma mark - MWPhoto Protocol Methods
 
 - (UIImage *)underlyingImage {
