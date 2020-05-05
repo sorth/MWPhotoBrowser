@@ -251,7 +251,7 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
     NSMutableArray *items = [[NSMutableArray alloc] init];
 
     // Left button - Grid
-    _deleteButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"trash.png"] style:UIBarButtonItemStylePlain target:self action:@selector(deleteButtonTapped:)];
+    _deleteButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemTrash target:self action:@selector(deleteButtonTapped:)];
     [items addObject:_deleteButton];
     if (_enableGrid) {
         hasItems = YES;
@@ -1179,6 +1179,10 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 }
 
 - (void) deleteAssetWithLocalIdentifier:(NSString*)localIdentifier {
+    if (!localIdentifier) {
+        return;
+    }
+    
     PHFetchResult<PHAsset *> *assets = [PHAsset fetchAssetsWithLocalIdentifiers:@[localIdentifier] options:nil];
     
     if (assets.count == 0) {
