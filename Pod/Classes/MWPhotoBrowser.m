@@ -1167,11 +1167,32 @@ static void * MWVideoPlayerObservation = &MWVideoPlayerObservation;
 
 -(void)showDeleteConfirmActionSheet {
     NSString *title = [NSString stringWithFormat:NSLocalizedString(@"Are you sure? You'll be prompted to permanently delete this photo from your media library.", nil)];
-    UIActionSheet *actionSheet = [[UIActionSheet alloc] initWithTitle:title
-                                                             delegate:self cancelButtonTitle:NSLocalizedString(@"Cancel", nil) destructiveButtonTitle:NSLocalizedString(@"Delete Photo", nil) otherButtonTitles:nil];
-    
-    actionSheet.actionSheetStyle = UIActionSheetStyleAutomatic;
-    [actionSheet showInView:[self view]];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil
+                                                                   message:title
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Delete Photo", nil)
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *action) {
+        [self deletePhoto];
+        [self hideControlsAfterDelay];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Cancel", nil)
+                                              style:UIAlertActionStyleCancel
+                                            handler:^(UIAlertAction *action) {
+        [self hideControlsAfterDelay];
+    }]];
+
+    // Required on iPad, where action sheets are popovers
+    UIPopoverPresentationController *popover = alert.popoverPresentationController;
+    if (popover) {
+        if (_deleteButton) {
+            popover.barButtonItem = _deleteButton;
+        } else {
+            popover.sourceView = self.view;
+            popover.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMaxY(self.view.bounds), 1, 1);
+        }
+    }
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)deleteButtonTapped:(id)sender {
